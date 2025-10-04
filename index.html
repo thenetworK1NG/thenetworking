@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Scroll-through Fullscreen Sections</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="cursor" aria-hidden="true"></div>
+  <nav class="dot-nav" aria-label="Section navigation">
+    <ul>
+      <li><a href="#s1" aria-label="Go to section 1"></a></li>
+      <li><a href="#s2" aria-label="Go to section 2"></a></li>
+    </ul>
+  </nav>
+
+  <main id="container">
+    <section id="s1" class="snap-section theme-1">
+      <div class="content">
+  <button id="btn-menu" type="button" class="menu-toggle" aria-expanded="false" aria-controls="menu-panel" aria-label="Menu">
+          <span class="menu-toggle__bar"></span>
+          <span class="menu-toggle__bar"></span>
+          <span class="menu-toggle__bar"></span>
+        </button>
+
+        <div id="menu-panel" class="menu-panel" role="menu" aria-hidden="true">
+          <ul class="menu-list">
+            <li>
+              <button id="btn-quote-menu" type="button" class="btn btn-liquid" aria-label="Open quote form from menu">
+                <span class="inner">GET QUOTE</span>
+              </button>
+            </li>
+            <li>
+              <button id="btn-services-menu" type="button" class="btn btn-liquid" role="menuitem" aria-label="Open services">
+                <span class="inner">Our services</span>
+              </button>
+            </li>
+            <li>
+              <button id="btn-explore-menu" type="button" class="btn btn-liquid" role="menuitem" aria-label="Explore tools">
+                <span class="inner">Explore tools</span>
+              </button>
+            </li>
+          </ul>
+        </div>
+
+        
+        <div class="hero-effect">
+          <div class="shapes">
+            <div class="shape shape-1"></div>
+            <div class="shape shape-2"></div>
+            <div class="shape shape-3"></div>
+          </div>
+          <div class="hero-content">
+            <h1 class="sr-only">WELCOME lets start networKING</h1>
+            <div id="particle-text" aria-hidden="true"></div>
+          </div>
+        </div>
+        
+        <div id="services" class="modal" role="dialog" aria-modal="true" aria-labelledby="services-title" aria-hidden="true">
+          <div class="modal__dialog" tabindex="-1">
+            <header class="modal__header">
+              <h2 id="services-title">Our services</h2>
+              <button class="modal__close" aria-label="Close">×</button>
+            </header>
+            <div class="modal__body">
+              <article class="intro">
+          <p>At The Networking, we don’t just build websites – we bring your ideas to life. Whether you need a sleek online CV, a stunning portfolio, a 3D product showcase, or a full business website with advanced features, we make it happen.</p>
+
+          <p>Here’s what we do best:</p>
+          <ul>
+            <li><strong>Custom 3D Animated Websites</strong> – complete with unique 3D models tailored to your vision.</li>
+            <li><strong>Interactive Experiences</strong> – animated cursors, dynamic backgrounds, and custom UI elements.</li>
+            <li><strong>One-of-a-Kind Designs</strong> – every website is handcrafted, guaranteed to stand out.</li>
+            <li><strong>Beyond Websites</strong> – apps, PC programs, product price calculators, quote systems, and more.</li>
+          </ul>
+
+          <p><em>Our motto: “You think it, we create it.”</em></p>
+
+          <p>So, if you’re ready to stand out, get connected. Talk to The Networking today.</p>
+
+          <p>And if you scroll down, you can explore real websites and apps we’ve created — proof of what The Networking can do for you.</p>
+              </article>
+            </div>
+          </div>
+        </div>
+
+        <div id="quote" class="modal" role="dialog" aria-modal="true" aria-labelledby="quote-title" aria-hidden="true">
+          <div class="modal__dialog modal__dialog--narrow" tabindex="-1">
+            <header class="modal__header">
+              <h2 id="quote-title">Get quote</h2>
+              <button class="modal__close" aria-label="Close">×</button>
+            </header>
+            <div class="modal__body">
+              <form id="quote-form" class="modal__form" novalidate>
+                <div class="form-card">
+                  <div class="form-grid">
+                    <div class="field">
+                      <label for="q-name">Name</label>
+                      <input id="q-name" name="name" type="text" placeholder="Your full name" autocomplete="name" required />
+                    </div>
+                    <div class="field">
+                      <label for="q-phone">Number</label>
+                      <input id="q-phone" name="phone" type="tel" placeholder="e.g. +1 555 123 4567" inputmode="tel" autocomplete="tel" required />
+                    </div>
+                    <div class="field">
+                      <label for="q-email">Email</label>
+                      <input id="q-email" name="email" type="email" placeholder="you@example.com" autocomplete="email" required />
+                    </div>
+                  </div>
+                  <div class="form-actions">
+                    <button type="submit" class="btn">Request quote</button>
+                    <button type="button" class="btn outline" data-close>Cancel</button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Simple controls to position the particle title -->
+    <div id="particle-controls" aria-label="Particle position controls">
+      <div class="pc-row">
+        <label for="pc-x">X</label>
+        <input id="pc-x" type="range" value="0" step="1" />
+        <output id="pc-x-out">0</output>
+      </div>
+      <div class="pc-row">
+        <label for="pc-y">Y</label>
+        <input id="pc-y" type="range" value="0" step="1" />
+        <output id="pc-y-out">0</output>
+      </div>
+      <div class="pc-actions">
+        <button id="pc-center" type="button" class="btn outline">Center</button>
+        <button id="pc-reset" type="button" class="btn outline">Reset</button>
+      </div>
+    </div>
+
+    <section id="s2" class="snap-section theme-2">
+      <div class="content">
+        <div class="cards">
+          <div class="maincontainer">
+            <div class="back">
+              <h2>What is Vurtual Threads</h2>
+              <p>This tool gives you the power to create custom clothing mockups directly in 3D space. With live UV unwrapping and real-time previews, you can design, adjust, and visualize your garments instantly — all from your browser, no extra software needed.</p>
+            </div>
+            <div class="front">
+              <div class="image">
+                <img src="vurtual.png" alt="Copywriting" />
+              </div>
+            </div>
+          </div>
+
+          <div class="maincontainer">
+            <div class="back">
+              <h2>What is FrameShift</h2>
+              <p>This tool lets you open 3D models right in your browser, animate the camera, play model animations, and export entire scenes with ease. No heavy software needed — just load, animate, and share your 3D creations instantly, anywhere.</p>
+            </div>
+            <div class="front">
+              <div class="image">
+                <img src="frameshift.png" alt="Content Marketing" />
+              </div>
+            </div>
+          </div>
+
+          <div class="maincontainer">
+            <div class="back">
+              <h2>What is Flipster</h2>
+              <p>This tool transforms your content into an interactive 3D book experience. Perfect for portfolios, CVs, menus, presentations, and more — fully customizable, engaging, and viewable right in the browser. Bring your pages to life with smooth 3D flips, animations, and a unique format that stands out</p>
+            </div>
+            <div class="front">
+              <div class="image">
+                <img src="flipster.png" alt="Web Writing" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script src="https://unpkg.com/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script type="module" src="script.js"></script>
+</body>
+</html>
