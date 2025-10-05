@@ -46,6 +46,15 @@
   const cancelBtn = modal.querySelector('[data-close]');
   if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
 
+  // Enable tap-to-flip behavior inside the quote card for mobile users
+  const card = modal.querySelector('.quote-card .container');
+  const front = modal.querySelector('.quote-card .front');
+  if (card && front) {
+    const toggleFlip = () => card.classList.toggle('is-flipped');
+    front.addEventListener('click', toggleFlip);
+    front.addEventListener('keypress', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleFlip(); } });
+  }
+
   // expose to menu module
   window.__openQuoteModal = openModal;
 })();
@@ -103,10 +112,10 @@ async function loadFirebase() {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const name = form.elements['name']?.value?.trim();
-    const phone = form.elements['phone']?.value?.trim();
     const email = form.elements['email']?.value?.trim();
-    console.log('[Quote] Submit clicked', { name, phone, email });
-    if (!name || !phone || !email) return; // basic guard; UI handled above
+    const message = form.elements['message']?.value?.trim();
+    console.log('[Quote] Submit clicked', { name, email, message });
+    if (!name || !email) return; // basic guard; UI handled via required
     let apis;
     try {
       apis = await loadFirebase();
@@ -115,17 +124,20 @@ async function loadFirebase() {
       alert('Unable to submit right now (network or SDK issue). Please try again later.');
       return;
     }
-    const btn = form.querySelector('button[type="submit"]');
-    const prevText = btn?.textContent;
-    if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+    // Support both <button type="submit"> and <input type="submit">
+    const btnButton = form.querySelector('button[type="submit"]');
+    const btnInput = form.querySelector('input[type="submit"]');
+    const prevText = btnButton?.textContent || btnInput?.value;
+    if (btnButton) { btnButton.disabled = true; btnButton.textContent = 'Sending…'; }
+    if (btnInput) { btnInput.disabled = true; btnInput.value = 'Sending…'; }
     try {
       const { db, ref, push, serverTimestamp, get, child } = apis;
       const quotesRef = ref(db, 'networking/quotes');
       console.log('[Quote] Pushing to /networking/quotes ...');
       const pushResult = await push(quotesRef, {
         name,
-        phone,
         email,
+        message: message || null,
         userAgent: navigator.userAgent,
         createdAt: serverTimestamp()
       });
@@ -143,13 +155,14 @@ async function loadFirebase() {
       alert('Thanks! Your request was sent successfully.');
       form.reset();
       // Close modal after success
-      const close = modal.querySelector('.modal__close');
-      close?.click();
+  // Close modal after success
+  try { modal.setAttribute('aria-hidden', 'true'); document.body.classList.remove('modal-open'); } catch {}
     } catch (err) {
       console.error('[Quote] Error saving to database:', err);
       alert('Sorry, there was an error sending your request. Please try again.');
     } finally {
-      if (btn) { btn.disabled = false; btn.textContent = prevText; }
+      if (btnButton) { btnButton.disabled = false; btnButton.textContent = prevText; }
+      if (btnInput) { btnInput.disabled = false; if (typeof prevText === 'string') btnInput.value = prevText; }
     }
   });
 })();
@@ -197,6 +210,8 @@ window.migrateQuotesToNetworking = async function migrateQuotesToNetworking() {
 
   const sections = Array.from(document.querySelectorAll('.snap-section'));
   const dots = Array.from(document.querySelectorAll('.dot-nav a'));
+  const arrowBtn = document.getElementById('arrow-next');
+  const mobileCTA = document.getElementById('mobile-next-cta');
   // prefersReduced already defined above
 
   function sectionIndexFromScroll() {
@@ -222,6 +237,22 @@ window.migrateQuotesToNetworking = async function migrateQuotesToNetworking() {
 
   function updateDots(activeIdx) {
     dots.forEach((a, i) => a.classList.toggle('active', i === activeIdx));
+    // Mobile-only arrow visibility: hide on last section
+    if (arrowBtn) {
+      const isMobile = window.innerWidth < 680;
+      const anyOpenModal = document.querySelector('.modal[aria-hidden="false"]');
+      const menuOpen = document.body.classList.contains('menu-open');
+      const show = isMobile && !anyOpenModal && !menuOpen && activeIdx < sections.length - 1;
+      arrowBtn.hidden = !show;
+    }
+    // Mobile CTA shows only on first section and when not covered by modals/menus
+    if (mobileCTA) {
+      const isMobile = window.innerWidth < 680;
+      const anyOpenModal = document.querySelector('.modal[aria-hidden="false"]');
+      const menuOpen = document.body.classList.contains('menu-open');
+      const showCTA = isMobile && !anyOpenModal && !menuOpen && activeIdx === 0;
+      mobileCTA.hidden = !showCTA;
+    }
   }
 
   // Observe which section is centered to update nav dots
@@ -272,6 +303,92 @@ window.migrateQuotesToNetworking = async function migrateQuotesToNetworking() {
     }
   }, { passive: false });
 
+  // Strictly disable drag/scroll on mobile ONLY on the first section;
+  // allow in modals and particle-controls regardless
+  (function mobileScrollLock() {
+    const isMobile = () => window.innerWidth < 680;
+    const panel = document.getElementById('particle-controls');
+    let lockActive = false; // true only when on first section
+    let pendingTopSnap = false; // avoid re-entrant snaps
+    function shouldAllowScroll(target) {
+      if (!isMobile()) return true; // desktop unaffected
+      if (!lockActive) return true; // lock only applies on top section
+      // Allow when a modal is open (modal body scroll) or interacting with particle controls
+      const anyOpenModal = document.querySelector('.modal[aria-hidden="false"] .modal__body');
+      if (anyOpenModal && (anyOpenModal.contains(target) || target.closest('.modal__body'))) return true;
+      if (panel && (panel.contains(target) || target.closest('#particle-controls'))) return true;
+      return false;
+    }
+    function preventScroll(e) {
+      if (!isMobile()) return; // let desktop be normal
+      if (!lockActive) return; // only lock on first section
+      const t = e.target;
+      if (!shouldAllowScroll(t)) {
+        if (e.cancelable) e.preventDefault();
+      }
+    }
+    // Apply body flag for CSS helpers
+    function updateBodyFlag() {
+      if (isMobile() && lockActive) document.body.classList.add('mobile-lock'); else document.body.classList.remove('mobile-lock');
+    }
+    updateBodyFlag();
+    window.addEventListener('resize', updateBodyFlag);
+    // Block touchmove and wheel globally (capture) and allow in whitelisted containers
+    window.addEventListener('touchmove', preventScroll, { passive: false, capture: true });
+    window.addEventListener('wheel', preventScroll, { passive: false, capture: true });
+
+    // Hook into section updates: lock on index 0, unlock otherwise
+    const applyLockFromIndex = (idx) => {
+      if (!isMobile()) { lockActive = false; updateBodyFlag(); return; }
+      if (idx === 0) {
+        const topTarget = sections[0] ? sections[0].offsetTop : 0;
+        const y = window.scrollY || window.pageYOffset || 0;
+        const tol = 6;
+        if (Math.abs(y - topTarget) > tol) {
+          // We're near the first section but not exactly at the top: snap to top first, then enable lock
+          if (!pendingTopSnap) {
+            pendingTopSnap = true;
+            lockActive = false;
+            updateBodyFlag();
+            try { window.scrollTo({ top: topTarget, behavior: 'smooth' }); } catch { window.scrollTo(0, topTarget); }
+            let attempts = 0;
+            const maxAttempts = 45; // ~750ms @ 60fps
+            const checkTop = () => {
+              attempts++;
+              const yy = window.scrollY || window.pageYOffset || 0;
+              if (Math.abs(yy - topTarget) <= tol || attempts >= maxAttempts) {
+                pendingTopSnap = false;
+                lockActive = true;
+                updateBodyFlag();
+                try { updateDots(0); } catch {}
+              } else {
+                requestAnimationFrame(checkTop);
+              }
+            };
+            requestAnimationFrame(checkTop);
+          }
+        } else {
+          // Already at top; enable lock immediately
+          pendingTopSnap = false;
+          lockActive = true;
+          updateBodyFlag();
+        }
+      } else {
+        // Not on first section: unlock
+        pendingTopSnap = false;
+        lockActive = false;
+        updateBodyFlag();
+      }
+    };
+    // Initial
+    applyLockFromIndex(0);
+    // When dots/observer updates run, they already call updateDots; we can piggyback by overriding updateDots below,
+    // but to avoid refactor, add an observer on scroll and intersect to recompute
+    const onScroll = () => applyLockFromIndex(sectionIndexFromScroll());
+    window.addEventListener('scroll', onScroll, { passive: true });
+    document.addEventListener('visibilitychange', onScroll);
+  })();
+
   // Activate correct dot on load based on hash
   function initFromHash() {
     const id = (location.hash || '#s1').slice(1);
@@ -289,6 +406,48 @@ window.migrateQuotesToNetworking = async function migrateQuotesToNetworking() {
       updateDots(i);
     });
   });
+
+  // Mobile-only arrow behavior
+  if (arrowBtn) {
+    const onMaybeToggle = () => {
+      const isMobile = window.innerWidth < 680;
+      if (!isMobile) { arrowBtn.hidden = true; return; }
+      const idx = sectionIndexFromScroll();
+      updateDots(idx);
+    };
+    arrowBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const idx = sectionIndexFromScroll();
+      const next = Math.min(idx + 1, sections.length - 1);
+      if (next !== idx) {
+        const top = sections[next].offsetTop;
+        window.scrollTo({ top, behavior: 'smooth' });
+      }
+    });
+    window.addEventListener('resize', onMaybeToggle);
+    document.addEventListener('visibilitychange', onMaybeToggle);
+  }
+
+  // Mobile-only CTA behavior (scroll down)
+  if (mobileCTA) {
+    const showOrHide = () => {
+      const isMobile = window.innerWidth < 680;
+      if (!isMobile) { mobileCTA.hidden = true; return; }
+      const idx = sectionIndexFromScroll();
+      updateDots(idx); // also handles CTA visibility
+    };
+    mobileCTA.addEventListener('click', (e) => {
+      e.preventDefault();
+      const idx = sectionIndexFromScroll();
+      const next = Math.min(idx + 1, sections.length - 1);
+      if (next !== idx) {
+        const top = sections[next].offsetTop;
+        window.scrollTo({ top, behavior: 'smooth' });
+      }
+    });
+    window.addEventListener('resize', showOrHide);
+    document.addEventListener('visibilitychange', showOrHide);
+  }
 
   window.addEventListener('hashchange', initFromHash);
   window.addEventListener('load', () => { initFromHash(); onScroll(); });
@@ -375,7 +534,12 @@ window.migrateQuotesToNetworking = async function migrateQuotesToNetworking() {
   const ctx = canvas.getContext('2d');
   host.appendChild(canvas);
 
-  let width = 0, height = 0, dpi = Math.max(window.devicePixelRatio || 1, 1);
+  let width = 0, height = 0, dpi = 1;
+  function computeDPI() {
+    const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+    // Ceil for crispness, cap to 3 to avoid huge canvases
+    return Math.min(3, Math.ceil(dpr));
+  }
   let particles = [];
   let rafId = 0;
   let mx = -9999, my = -9999;
@@ -383,6 +547,7 @@ window.migrateQuotesToNetworking = async function migrateQuotesToNetworking() {
 
   const FULL_TEXT = 'NETWORKING';
   let TEXT_LINES = [FULL_TEXT];
+  let VERTICAL_MODE = false; // on mobile, render text vertically (one letter per line)
   let SAMPLE_GAP = 3; // very dense for solid look
   let PARTICLE_SIZE = 3.2; // bold radius
   let FORCE_RADIUS = 120; // bigger influence
@@ -391,6 +556,7 @@ window.migrateQuotesToNetworking = async function migrateQuotesToNetworking() {
   let DAMPING = 0.885; // velocity damping
 
   function resize() {
+    dpi = computeDPI();
     const rect = host.getBoundingClientRect();
     width = Math.max(10, Math.floor(rect.width));
     height = Math.max(10, Math.floor(rect.height));
@@ -409,18 +575,24 @@ window.migrateQuotesToNetworking = async function migrateQuotesToNetworking() {
     off.height = Math.floor(height * dpi);
     const octx = off.getContext('2d');
     octx.clearRect(0, 0, off.width, off.height);
-    const family = "'Exwayer', Montserrat, Inter, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial";
+  // Use a normal font stack (Arial-first) so particle shapes follow a standard font
+  const family = "Arial, 'Helvetica Neue', Helvetica, system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, Cantarell, 'Noto Sans', sans-serif";
     // Determine line count and allocate vertical slots
     const lines = TEXT_LINES;
     const lineCount = lines.length;
-    // Base font size from line height share
-  const lineHeightShare = 0.84 / lineCount; // use more height for single line
+  // Base font size from line height share (larger share for vertical mobile)
+  const lineHeightShare = (VERTICAL_MODE ? 1.15 : 0.84) / lineCount;
     let fontSize = Math.floor(height * lineHeightShare * dpi);
   octx.textAlign = 'center';
     octx.textBaseline = 'middle';
     // For each line, shrink-to-fit width
-  const maxTextWidth = off.width * 0.98; // use almost full width
-    const yStep = off.height / (lineCount + 1);
+    // For vertical mode, allow wider glyphs so letters appear bigger
+  const maxTextWidth = (VERTICAL_MODE ? off.width * 0.95 : off.width * 0.98);
+  // Add safe vertical padding so top/bottom letters aren't clipped
+  const padY = Math.floor((VERTICAL_MODE ? 0.04 : 0.06) * off.height);
+  const yRange = Math.max(0, off.height - padY * 2);
+  // Default step (used for non-vertical layout)
+  const yStep = yRange / (lineCount + 1);
     octx.fillStyle = '#ffffff';
     for (let i = 0; i < lineCount; i++) {
       const line = lines[i];
@@ -432,7 +604,10 @@ window.migrateQuotesToNetworking = async function migrateQuotesToNetworking() {
         octx.font = `800 ${fs}px ${family}`;
         m = octx.measureText(line);
       }
-      const y = yStep * (i + 1);
+  // Position baselines: evenly spread in vertical mode, classic stepped otherwise
+  const y = (VERTICAL_MODE && lineCount > 1)
+    ? (padY + (yRange) * (i / (lineCount - 1)))
+    : (padY + yStep * (i + 1));
       // Draw a faint stroke then fill to tighten edges for sampling
       octx.lineWidth = Math.max(1, Math.floor(fs * 0.06));
       octx.miterLimit = 2;
@@ -503,7 +678,8 @@ window.migrateQuotesToNetworking = async function migrateQuotesToNetworking() {
     ctx.save();
     ctx.scale(dpi, dpi);
 
-    // Draw particles with a soft glow
+    const isMobile = width < 680;
+    // Draw particles
     for (const p of particles) {
       // mouse force
       const dx = p.x - mx;
@@ -523,10 +699,11 @@ window.migrateQuotesToNetworking = async function migrateQuotesToNetworking() {
       p.vx *= DAMPING; p.vy *= DAMPING;
       p.x += p.vx; p.y += p.vy;
 
-      // render
-      const glow = 0.3 + Math.min(1, 1 - Math.min(1, d2 / r2)) * 0.7;
+      // render (higher opacity on phones for sharper look)
+      const proximity = Math.max(0, 1 - Math.min(1, d2 / r2));
+      const alpha = isMobile ? 0.95 : (0.7 + 0.3 * proximity);
       ctx.beginPath();
-      ctx.fillStyle = `rgba(94, 234, 212, ${0.65 * glow})`;
+      ctx.fillStyle = `rgba(94, 234, 212, ${alpha})`;
       ctx.arc(p.x, p.y, PARTICLE_SIZE, 0, Math.PI * 2);
       ctx.fill();
     }
@@ -543,21 +720,23 @@ window.migrateQuotesToNetworking = async function migrateQuotesToNetworking() {
   function onLeave() { mx = -9999; my = -9999; }
 
   window.addEventListener('resize', resize);
+  window.addEventListener('orientationchange', resize);
   canvas.addEventListener('mousemove', onMove, { passive: true });
   canvas.addEventListener('mouseleave', onLeave, { passive: true });
   canvas.addEventListener('touchmove', onMove, { passive: true });
   canvas.addEventListener('touchend', onLeave, { passive: true });
 
   function decideLayout() {
-    // Phone-friendly layout: split into two lines when narrow
+    // Mobile: stack letters vertically; Desktop: single line
     if (width < 680) {
-      // Keep single word; just tune for mobile
-      TEXT_LINES = [FULL_TEXT];
+      VERTICAL_MODE = true;
+      TEXT_LINES = FULL_TEXT.split(''); // one letter per line
       SAMPLE_GAP = 3;
-      PARTICLE_SIZE = 3.0;
+      PARTICLE_SIZE = 3.6; // thicker particles for bolder mobile look
       FORCE_RADIUS = 110;
       FORCE_STRENGTH = 0.46;
     } else {
+      VERTICAL_MODE = false;
       TEXT_LINES = [FULL_TEXT];
       SAMPLE_GAP = 3;
       PARTICLE_SIZE = 3.2;
@@ -580,20 +759,39 @@ window.migrateQuotesToNetworking = async function migrateQuotesToNetworking() {
   (function setupControls() {
     const panel = document.getElementById('particle-controls');
     if (!panel) return;
+    // Skip controls entirely on phones to lock placement/size
+    if (window.innerWidth < 680) {
+      panel.setAttribute('hidden', '');
+      const opener = document.getElementById('pc-open');
+      if (opener) opener.setAttribute('hidden', '');
+      return;
+    }
     const xEl = document.getElementById('pc-x');
     const yEl = document.getElementById('pc-y');
     const xo = document.getElementById('pc-x-out');
     const yo = document.getElementById('pc-y-out');
     const centerBtn = document.getElementById('pc-center');
     const resetBtn = document.getElementById('pc-reset');
+    const closeBtn = document.getElementById('pc-close');
+    const openBtn = document.getElementById('pc-open');
+    // We'll create mobile-only size controls dynamically below
+    let wRow = null, hRow = null, wInput = null, hInput = null, wOut = null, hOut = null;
 
     // Range bounds: allow moving roughly half canvas in any direction
     function setRanges() {
-      const maxX = Math.floor(width * 0.45);
-      const maxY = Math.floor(height * 0.45);
+      const isMobile = width < 680;
+      const maxX = Math.floor(width * (isMobile ? 0.6 : 0.45));
+      const maxY = Math.floor(height * (isMobile ? 0.6 : 0.45));
       xEl.min = -maxX; xEl.max = maxX;
       yEl.min = -maxY; yEl.max = maxY;
       xEl.step = 1; yEl.step = 1;
+      // Update size slider ranges when present (mobile only)
+      if (isMobile && wInput && hInput) {
+        const maxW = Math.max(200, Math.floor(window.innerWidth * 0.98));
+        const maxH = Math.max(160, Math.floor(window.innerHeight * 0.90));
+        wInput.min = '160'; wInput.max = String(maxW); wInput.step = '1';
+        hInput.min = '140'; hInput.max = String(maxH); hInput.step = '1';
+      }
     }
 
     function applyOffsets() {
@@ -607,24 +805,145 @@ window.migrateQuotesToNetworking = async function migrateQuotesToNetworking() {
       try { localStorage.setItem('pt_offset', JSON.stringify({ x: offsetX, y: offsetY })); } catch {}
     }
 
-    // Load persisted
+    function applySize(fromInit = false) {
+      if (!(wInput && hInput)) return;
+      const w = parseInt(wInput.value || '0', 10) || 0;
+      const h = parseInt(hInput.value || '0', 10) || 0;
+      if (wOut) wOut.textContent = String(w);
+      if (hOut) hOut.textContent = String(h);
+      if (w > 0) host.style.width = `${w}px`;
+      if (h > 0) host.style.height = `${h}px`;
+      // Recompute canvas after size change
+      resize();
+      // Adjust offset slider ranges to new size
+      setRanges();
+      if (!fromInit) {
+        try { localStorage.setItem('pt_size', JSON.stringify({ w, h })); } catch {}
+      }
+    }
+
+    // Load persisted (but enforce permanent defaults on mobile)
     try {
       const saved = JSON.parse(localStorage.getItem('pt_offset') || 'null');
-      if (saved && typeof saved.x === 'number' && typeof saved.y === 'number') {
+      const vw = typeof window !== 'undefined' ? window.innerWidth || width : width;
+      const isMobileLoad = vw < 680;
+      if (isMobileLoad) {
+        // Permanent mobile placement
+        offsetX = -2; offsetY = 4;
+      } else if (saved && typeof saved.x === 'number' && typeof saved.y === 'number') {
         offsetX = saved.x; offsetY = saved.y;
+      } else {
+        // Desktop default
+        offsetX = -272; offsetY = 0;
       }
-    } catch {}
+    } catch { offsetX = 0; offsetY = 0; }
+
+    // Create mobile-only width/height sliders
+    function ensureMobileSizeControls() {
+      const isMobile = width < 680;
+      // If desktop, remove/hide controls if they exist
+      if (!isMobile) {
+        if (wRow) { panel.removeChild(wRow); wRow = null; }
+        if (hRow) { panel.removeChild(hRow); hRow = null; }
+        wInput = hInput = wOut = hOut = null;
+        // On desktop, clear inline width/height so CSS controls layout
+        host.style.width = '';
+        host.style.height = '';
+        return;
+      }
+      // Already created
+      if (wRow && hRow) return;
+
+      // Build Width row
+      wRow = document.createElement('div'); wRow.className = 'pc-row';
+      const wLabel = document.createElement('label'); wLabel.setAttribute('for', 'pc-w'); wLabel.textContent = 'W';
+      wInput = document.createElement('input'); wInput.type = 'range'; wInput.id = 'pc-w';
+      wOut = document.createElement('output'); wOut.id = 'pc-w-out'; wOut.textContent = '0';
+      wRow.appendChild(wLabel); wRow.appendChild(wInput); wRow.appendChild(wOut);
+
+      // Build Height row
+      hRow = document.createElement('div'); hRow.className = 'pc-row';
+      const hLabel = document.createElement('label'); hLabel.setAttribute('for', 'pc-h'); hLabel.textContent = 'H';
+      hInput = document.createElement('input'); hInput.type = 'range'; hInput.id = 'pc-h';
+      hOut = document.createElement('output'); hOut.id = 'pc-h-out'; hOut.textContent = '0';
+      hRow.appendChild(hLabel); hRow.appendChild(hInput); hRow.appendChild(hOut);
+
+      // Insert above actions
+      const actions = panel.querySelector('.pc-actions');
+      if (actions) {
+        panel.insertBefore(wRow, actions);
+        panel.insertBefore(hRow, actions);
+      } else {
+        panel.appendChild(wRow);
+        panel.appendChild(hRow);
+      }
+
+      // Initialize ranges and values
+      setRanges();
+  // Permanent mobile size defaults
+  let savedSize = null;
+  try { savedSize = JSON.parse(localStorage.getItem('pt_size') || 'null'); } catch {}
+  const initW = 299;
+  const initH = 614;
+      wInput.value = String(initW);
+      hInput.value = String(initH);
+      applySize(true);
+
+      // Wire events
+      wInput.addEventListener('input', () => applySize());
+      hInput.addEventListener('input', () => applySize());
+    }
 
     setRanges();
     applyOffsets();
+    ensureMobileSizeControls();
+    // Re-apply permanent mobile defaults immediately if on mobile
+    if (width < 680) {
+      offsetX = -2; offsetY = 4; applyOffsets();
+      if (wInput && hInput) { wInput.value = '299'; hInput.value = '614'; applySize(true); }
+    }
+
+    // Close/Open logic for mobile settings panel
+    function syncOpenButton() {
+      const isMobile = width < 680;
+      if (!openBtn) return;
+      if (isMobile) {
+        const hidden = panel.hasAttribute('hidden');
+        openBtn.hidden = !hidden; // show gear when panel is hidden
+      } else {
+        openBtn.hidden = true;
+      }
+    }
+    function closePanel() {
+      panel.setAttribute('hidden', '');
+      syncOpenButton();
+    }
+    function openPanel() {
+      panel.removeAttribute('hidden');
+      syncOpenButton();
+    }
+    if (closeBtn) closeBtn.addEventListener('click', closePanel);
+    if (openBtn) openBtn.addEventListener('click', openPanel);
+    window.addEventListener('resize', syncOpenButton);
+    // Initialize visibility
+    syncOpenButton();
 
     xEl.addEventListener('input', () => { offsetX = parseInt(xEl.value || '0', 10) || 0; applyOffsets(); });
     yEl.addEventListener('input', () => { offsetY = parseInt(yEl.value || '0', 10) || 0; applyOffsets(); });
     centerBtn.addEventListener('click', () => { offsetX = 0; offsetY = 0; applyOffsets(); });
     resetBtn.addEventListener('click', () => { offsetX = 0; offsetY = 0; applyOffsets(); try { localStorage.removeItem('pt_offset'); } catch {} });
 
-    // Update ranges when canvas resizes
-    window.addEventListener('resize', () => { setRanges(); applyOffsets(); });
+    // Update ranges and mobile controls when canvas/window resizes
+    window.addEventListener('resize', () => {
+      setRanges(); ensureMobileSizeControls();
+      if (width < 680) {
+        // Enforce mobile defaults after resize/orientation changes
+        offsetX = -2; offsetY = 4; applyOffsets();
+        if (wInput && hInput) { wInput.value = '299'; hInput.value = '614'; applySize(true); }
+      } else {
+        applyOffsets();
+      }
+    });
   })();
 })();
 

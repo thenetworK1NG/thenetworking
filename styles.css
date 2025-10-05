@@ -185,10 +185,10 @@ body.modal-open { overflow: hidden; }
   inset: 0;
   display: grid;
   place-items: center;
-  padding: 24px; /* keep dialog from touching screen edges */
-  background: rgb(6 8 12 / 60%);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
+  padding: 0; /* no extra padding around standalone card */
+  background: transparent; /* no dark overlay */
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   opacity: 0;
   pointer-events: none;
   transition: opacity .25s ease;
@@ -279,6 +279,16 @@ body.modal-open { overflow: hidden; }
   transition: border-color .2s ease, background .2s ease, box-shadow .2s ease;
 }
 .field input::placeholder { color: #a7afbd; }
+.modal__dialog--bare {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  max-height: none;
+  width: auto; /* shrink to fit card */
+  transform: none;
+  opacity: 1;
+}
 .field input:focus { border-color: #22d3ee; box-shadow: 0 0 0 3px rgb(34 211 238 / 20%); background: rgb(9 12 18 / 72%); }
 .field input:invalid:focus { border-color: #f87171; box-shadow: 0 0 0 3px rgb(248 113 113 / 18%); }
 
@@ -287,6 +297,8 @@ body.modal-open { overflow: hidden; }
   background: transparent;
   color: #fff;
   border: 1px solid rgb(255 255 255 / 22%);
+.modal__dialog--bare .modal__body { padding: 0; }
+.modal__dialog--bare .modal__header { display: none; }
   box-shadow: none;
 }
 .btn.outline:hover { background: rgb(255 255 255 / 10%); }
@@ -397,6 +409,10 @@ p {
   .cards { grid-template-columns: repeat(2, minmax(240px, 1fr)); }
 }
 @media (max-width: 680px) {
+  /* Give more vertical room to the hero on phones for wider letter spacing */
+  .hero-effect { height: 100svh; }
+  /* Remove tweak menu on phones */
+  #particle-controls, #pc-open { display: none !important; }
   .cards { grid-template-columns: 1fr; }
 }
 
@@ -553,6 +569,10 @@ body.menu-open .dot-nav { opacity: 0; pointer-events: none; transition: opacity 
 /* Mobile optimizations  */
 /* ===================== */
 @media (max-width: 520px) {
+  /* Disable section snap and smooth scroll on phones; use arrow nav instead */
+  html { scroll-behavior: auto; }
+  html, html:not(.no-snap) { scroll-snap-type: none; }
+
   /* Use dynamic viewport units to account for URL bar */
   .snap-section {
     min-height: 100dvh;
@@ -571,7 +591,7 @@ body.menu-open .dot-nav { opacity: 0; pointer-events: none; transition: opacity 
   #btn-services { margin-top: 8px; }
 
   /* Ensure the dot nav doesn't trigger horizontal overflow */
-  .dot-nav { right: 10px; }
+  .dot-nav { right: 10px; display: none; }
   .dot-nav a { width: 10px; height: 10px; }
 
   /* Modal safe spacing on notched devices */
@@ -580,6 +600,49 @@ body.menu-open .dot-nav { opacity: 0; pointer-events: none; transition: opacity 
   .modal { padding-top: max(12px, env(safe-area-inset-top)); }
   .modal { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
   .modal__dialog { width: min(96vw, 720px); max-height: min(90dvh, 720px); }
+
+  /* Mobile wide CTA at bottom of hero */
+  .mobile-cta {
+    position: absolute;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%);
+    border: 1px solid rgb(255 255 255 / 15%);
+    background: rgb(255 255 255 / 8%);
+    color: #fff;
+    border-radius: 999px;
+    padding: 12px 22px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    z-index: 5;
+  }
+  .mobile-cta__icon {
+    width: 0; height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 9px solid #fff;
+  }
+  /* Only show CTA on phones; JS controls [hidden] attribute */
+  #mobile-next-cta[hidden] { display: none !important; }
+
+  /* Gear open button (shows when panel is closed) */
+  .gear-btn {
+    position: fixed;
+    left: 12px;
+    bottom: 12px;
+    z-index: 3100;
+    width: 42px; height: 42px;
+    border-radius: 12px;
+    background: rgb(255 255 255 / 8%);
+    border: 1px solid rgb(255 255 255 / 15%);
+    color: #fff;
+    display: grid; place-items: center;
+  }
+  #pc-open[hidden] { display: none !important; }
 }
 
 @media (max-width: 680px) {
@@ -594,4 +657,134 @@ body.menu-open .dot-nav { opacity: 0; pointer-events: none; transition: opacity 
   .cards .maincontainer > .back { width: 100%; height: 100%; }
   .cards .back h2 { font-size: 16px; }
   .cards .back p { font-size: 14px; }
+
+  /* Larger particle area by default on phones */
+  #particle-text { 
+    width: 100vw; 
+    height: min(96svh, 96vh);
+    transform: translate(-2px, 4px); /* keep locked placement on phones */
+  }
+
+  /* Mobile next-section arrow button (styled like hamburger) */
+  .arrow-btn {
+    position: fixed;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%);
+    z-index: 1100;
+    width: 46px;
+    height: 42px;
+    border-radius: 12px;
+    background: rgb(255 255 255 / 8%);
+    border: 1px solid rgb(255 255 255 / 15%);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+  }
+  .arrow-btn:focus { outline: 2px solid #22d3ee; outline-offset: 2px; }
+  .arrow-btn .arrow-icon {
+    display: inline-block;
+    width: 0; height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-top: 12px solid #fff; /* downward pointing triangle */
+  }
+  /* Ensure the pill CTA and arrow don't overlap; arrow is center bottom, CTA is bottom of hero container */
+
+  /* Fully lock page scrolling on phones while on top section; allow internal scroll in whitelisted panes */
+  html, body { overscroll-behavior: none; }
+  body.mobile-lock { overflow: hidden; }
+  body.mobile-lock .snap-section { touch-action: none; }
+}
+
+/* ================================ */
+/* Quote modal: Flip-card UI styles */
+/* Scoped to .quote-card to avoid clashes */
+.quote-card { position: relative; display: grid; place-items: center; }
+.quote-card .container {
+  min-width: 700px;
+  min-height: 350px;
+  border-radius: 20px;
+  position: relative;
+  transition: 1.5s ease-in-out;
+  transform-style: preserve-3d;
+}
+.quote-card .side {
+  position: absolute;
+  text-align: center;
+  width: 100%;
+  height: 100%;
+  padding: 20px 50px;
+  color: #fff;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  border-radius: 20px;
+}
+.quote-card .content { transform: translateZ(70px) scale(0.8); line-height: 1.5em; }
+.quote-card .content h1 { position: relative; }
+.quote-card .front .content h1 {
+  letter-spacing: 0.15em; /* neat spacing */
+  text-transform: uppercase;
+  margin-top: 10px;
+}
+.quote-card .front .content h1 .line2 { display: inline-block; margin-top: 28px; }
+@media (max-width: 520px) {
+  .quote-card .front .content h1 .line2 { margin-top: 20px; }
+}
+.quote-card .content p { margin-top: 50px; line-height: 2em; }
+.quote-card .content h1:before {
+  content: "";
+  position: absolute;
+  bottom: -20px;
+  height: 3px;
+  background-color: #3e3;
+  width: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.quote-card .front {
+  z-index: 2;
+  background-size: cover;
+  background-image: url(https://userscontent2.emaze.com/images/f9538183-0ff9-478f-b964-c8ab90421e3b/3d28e192fda5c17250f96a2779c84475.jpg);
+}
+.quote-card .back {
+  background-color: #333;
+  transform: rotateY(180deg);
+  z-index: 0;
+  padding-top: 10px;
+  background-image: url(https://userscontent2.emaze.com/images/f9538183-0ff9-478f-b964-c8ab90421e3b/3d28e192fda5c17250f96a2779c84475.jpg);
+  background-size: cover;
+}
+.quote-card .container:hover { transform: rotateY(180deg); }
+.quote-card .container.is-flipped { transform: rotateY(180deg); }
+.quote-card .front { cursor: pointer; }
+.quote-card form { text-align: left; }
+.quote-card .back h1 { margin: 0; }
+.quote-card form label,
+.quote-card form input { display: block; }
+.quote-card form input,
+.quote-card form textarea {
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid #444;
+  padding: 5px;
+  width: 100%;
+  color: #fff;
+}
+.quote-card form label { margin: 15px 0; }
+.quote-card form input[type="submit"] {
+  display: block;
+  width: auto;
+  margin: 10px auto;
+  padding: 5px 10px;
+  border: 3px solid #555;
+  border-radius: 4px;
+  color: #fff;
+  cursor: pointer;
+  background: transparent;
+}
+/* removed .white-mode link */
+
+@media (max-width: 760px) {
+  .quote-card .container { min-width: 0; width: min(92vw, 700px); min-height: 360px; }
 }
